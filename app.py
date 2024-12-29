@@ -20,12 +20,12 @@ def receive_text():
             # Send the text to OpenAI to generate a poem
         try:
             response = openai.chat.completions.create(
-                model="gpt-4-turbo",
+                model="gpt-4o",
                 messages=[
                     {"role": "system", "content": "You are a helpful programming assistant."},
-                    {"role": "user", "content": f"Complete the following Java code: {text}"}
+                    {"role": "user", "content": f"Complete the following Java code by providing me the remaining lines. Just give me the remaining lines in correct syntax. Do not give me the whole block of code: {text}"}
                 ],
-                max_tokens=100,
+                max_tokens=300,
                 temperature=0.7
             )
             # Extract the generated poem text from the response
