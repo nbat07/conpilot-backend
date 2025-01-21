@@ -1,3 +1,4 @@
+import subprocess
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import openai
@@ -9,6 +10,12 @@ CORS(app)
 client = OpenAI()
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
+
+def calculate_accuracy(output, errors):
+    if errors:
+        return 0
+    # Example: If all tests pass, return 100% accuracy
+    return 100 if 'OK' in output else 0
 
 @app.route('/receive_text', methods=['POST'])
 def receive_text():
@@ -31,7 +38,26 @@ def receive_text():
             # Extract the generated poem text from the response
             codeCompletion = response.choices[0].message.content
             print(f"Generated code: {codeCompletion}")
-            return jsonify({'status': 'success', 'message': 'Text received', 'code': codeCompletion}), 200
+                        # Save the generated code to a file
+
+            codeCompletion = codeCompletion.replace('```java\n', '').replace('```', '').strip()
+            combinedCode = text + codeCompletion
+            with open('GeneratedCode.java', 'w') as f:
+                f.write(combinedCode)
+
+            # Run the Python script to compile and test the code
+            result = subprocess.run(['python', 'run_tests.py'], capture_output=True, text=True)
+
+            # Parse the test results
+            output = result.stdout
+            errors = result.stderr
+            print(f"output: {output}")
+            print(f"errors: {errors}")
+
+            accuracy = calculate_accuracy(output, errors)
+            print(f"accuracy: {accuracy}")
+
+            return jsonify({'status': 'success', 'message': 'Text received', 'code': codeCompletion, 'output': output, 'errors': errors}), 200
         except Exception as e:
             print(f"OpenAI API error: {e}")
             return jsonify({'status': 'error', 'message': 'OpenAI API error'}), 500
