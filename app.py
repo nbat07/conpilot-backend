@@ -22,15 +22,17 @@ def receive_text():
     data = request.json
     print('Received data:', data)
     text = data.get('text')
+    test_file = data.get('testFile')
     if text:
         print(f"Received text: {text}")
+        print(f"Using test file: {test_file}")
             # Send the text to OpenAI to generate a poem
         try:
             response = openai.chat.completions.create(
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": "You are a helpful programming assistant."},
-                    {"role": "user", "content": f"Complete the following Java code by providing me the remaining lines. Just give me the remaining lines in correct syntax. Do not give me the whole block of code: {text}"}
+                    {"role": "user", "content": f"Complete the following Java code by providing me the remaining lines. Just give me the remaining lines in correct syntax. Do not give me the whole block of code. Do not add any comments, just give the remaining lines of code in correct syntax: {text}"}
                 ],
                 max_tokens=300,
                 temperature=0.7
@@ -46,7 +48,7 @@ def receive_text():
                 f.write(combinedCode)
 
             # Run the Python script to compile and test the code
-            result = subprocess.run(['python', 'run_tests.py'], capture_output=True, text=True)
+            result = subprocess.run(['python', 'run_tests.py', test_file], capture_output=True, text=True)
 
             # Parse the test results
             output = result.stdout
