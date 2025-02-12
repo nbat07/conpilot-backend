@@ -34,17 +34,18 @@ def receive_text():
                     {"role": "system", "content": "You are a helpful programming assistant."},
                     {"role": "user", "content": f"Complete the following Java code by providing me the remaining lines. Just give me the remaining lines in correct syntax. Do not give me the whole block of code. Do not add any comments, just give the remaining lines of code in correct syntax: {text}"}
                 ],
-                max_tokens=300,
+                max_tokens=1000,
                 temperature=0.7
             )
             # Extract the generated poem text from the response
             codeCompletion = response.choices[0].message.content
             print(f"Generated code: {codeCompletion}")
-                        # Save the generated code to a file
 
             codeCompletion = codeCompletion.replace('```java\n', '').replace('```', '').strip()
             combinedCode = text + codeCompletion
-            with open('GeneratedCode.java', 'w') as f:
+
+            generated_code_file = test_file.replace('Test.java', '.java')
+            with open(generated_code_file, 'w') as f:
                 f.write(combinedCode)
 
             # Run the Python script to compile and test the code

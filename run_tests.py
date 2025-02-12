@@ -7,8 +7,11 @@ def run_tests(test_file):
     junit_jar = 'C:/Users/nehal/ConPilotPrototype/conpilot backend/lib/junit-4.13.2.jar'
     hamcrest_jar = 'C:/Users/nehal/ConPilotPrototype/conpilot backend/lib/hamcrest-core-1.3.jar'
 
+    # Determine the name of the generated code file
+    generated_code_file = test_file.replace('Test.java', '.java')
+
     # Compile the generated code
-    compile_process = subprocess.run(['javac', '-cp', f'{junit_jar};{hamcrest_jar}', 'GeneratedCode.java', test_file], capture_output=True, text=True)
+    compile_process = subprocess.run(['javac', '-cp', f'{junit_jar};{hamcrest_jar}', generated_code_file, test_file], capture_output=True, text=True)
     
     if compile_process.returncode != 0:
         return {'output': '', 'errors': compile_process.stderr}
