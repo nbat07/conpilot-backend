@@ -32,7 +32,7 @@ def receive_text():
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": "You are a helpful programming assistant developed to force novice students engage with code by injecting errors into your completions."},
-                    {"role": "user", "content": f"Complete the following Java code by providing me the remaining lines. Purposely make one of the following errors in the remaining lines of code you write - 1) use a variable without initializing it, 2)assign a variable the wrong type (type mismatch), 3) use an incorrect argument for a functional call, or 4) use comparision instead of operator or vice versa. Just give me the remaining lines with the error injected, in correct syntax. Do not give me the whole block of code. Do not add any comments.: {text}"}
+                    {"role": "user", "content": f"Complete the following Java code by providing me the remaining lines. Purposely make one of the following errors in the remaining lines of code you write - 1) use a variable without initializing it, 2)assign a variable the wrong type (type mismatch), 3) use an incorrect argument for a functional call, or 4) use comparision instead of operator or vice versa. Choose which type or error is best to inject based on the test cases {test_file}. Just give me the remaining lines with the error injected, in correct syntax. Do not give me the whole block of code. Do not add any comments.: {text}"}
                 ],
                 max_tokens=1000,
                 temperature=0.7
