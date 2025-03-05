@@ -27,13 +27,19 @@ def receive_text():
     print('Received data:', data)
     text = data.get('text')
     test_file = data.get('testFile')
+    perform_accuracy_testing = data.get('performAccuracyTesting', False)
+
     if text:
         print(f"Received text: {text}")
         print(f"Using test file: {test_file}")
         
         try:
-            with open(test_file, 'r') as file:
-                test_cases = file.read()
+            if perform_accuracy_testing:
+                with open(test_file, 'r') as file:
+                    test_cases = file.read()
+            else:
+                test_cases = ""
+
         except Exception as e:
             print(f"Error reading test file: {e}")
             log_to_file(f"Error reading test file: {e}")
@@ -94,23 +100,26 @@ def receive_text():
             codeCompletion = codeCompletion.replace('```java\n', '').replace('```', '').strip()
             combinedCode = text + codeCompletion
 
-            generated_code_file = test_file.replace('Test.java', '.java')
-            with open(generated_code_file, 'w') as f:
-                f.write(combinedCode)
+            if perform_accuracy_testing:
+                generated_code_file = test_file.replace('Test.java', '.java')
+                with open(generated_code_file, 'w') as f:
+                    f.write(combinedCode)
 
-            # Run the Python script to compile and test the code
-            result = subprocess.run(['python', 'run_tests.py', test_file], capture_output=True, text=True)
+                # Run the Python script to compile and test the code
+                result = subprocess.run(['python', 'run_tests.py', test_file], capture_output=True, text=True)
 
-            # Parse the test results
-            output = result.stdout
-            errors = result.stderr
-            print(f"output: {output}")
-            print(f"errors: {errors}")
+                # Parse the test results
+                output = result.stdout
+                errors = result.stderr
+                print(f"output: {output}")
+                print(f"errors: {errors}")
 
-            accuracy = calculate_accuracy(output, errors)
-            print(f"accuracy: {accuracy}")
+                accuracy = calculate_accuracy(output, errors)
+                print(f"accuracy: {accuracy}")
 
-            return jsonify({'status': 'success', 'message': 'Text received', 'code': codeCompletion, 'output': output, 'errors': errors}), 200
+                return jsonify({'status': 'success', 'message': 'Text received', 'code': codeCompletion, 'output': output, 'errors': errors}), 200
+            else:
+                return jsonify({'status': 'success', 'message': 'Text received', 'code': codeCompletion}), 200
         except Exception as e:
             print(f"OpenAI API error: {e}")
             return jsonify({'status': 'error', 'message': 'OpenAI API error'}), 500
