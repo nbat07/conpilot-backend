@@ -17,6 +17,10 @@ def calculate_accuracy(output, errors):
     # Example: If all tests pass, return 100% accuracy
     return 100 if 'OK' in output else 0
 
+def log_to_file(log_message):
+    with open('terminalLog.txt', 'a') as log_file:
+        log_file.write(log_message + '\n')
+
 @app.route('/receive_text', methods=['POST'])
 def receive_text():
     data = request.json
@@ -26,13 +30,59 @@ def receive_text():
     if text:
         print(f"Received text: {text}")
         print(f"Using test file: {test_file}")
-            # Send the text to OpenAI to generate a poem
+        
+        try:
+            with open(test_file, 'r') as file:
+                test_cases = file.read()
+        except Exception as e:
+            print(f"Error reading test file: {e}")
+            log_to_file(f"Error reading test file: {e}")
+            return jsonify({'status': 'error', 'message': 'Error reading test file'}), 500
+    
+        correct_examples = [
+            {
+                "prompt": "public class Greeting {\n    public static String greet(String name) {\n        // The function will greet the name with \"Hi\" and \"Bye\"\n",
+                "completion": "        StringBuilder result = new StringBuilder();\n        result.append(\"Hi \").append(name).append(\"\\n\");\n        result.append(\"Bye \").append(name);\n        return result.toString();\n    }\n}"
+            },
+            {
+                "prompt": "public class StringModifier {\n    public static String modifyString(String inp) {\n        int ni = inp.indexOf(\"not\");\n        int bi = inp.indexOf(\"bad\");\n\n        if (ni == -1) {\n            return inp;\n        } else if (bi == -1) {\n            return inp;\n        } else if (ni > bi) {\n            return inp;\n        } else {",
+                "completion": "            bi = bi + \"bad\".length();\n            String op = inp.substring(0, ni) + \"good\" + inp.substring(bi);\n            return op;\n        }\n    }\n}",
+            },
+            {
+                "prompt":  "public class BitcoinPasswordDecryptor {\n    public static int revNum(String n) {\n        return Integer.parseInt(new StringBuilder(n).reverse().toString());\n    }\n\n    public static boolean isPrime(int n) {\n        if (n == 2) {\n            return true;\n        }\n        if (n == 1 || n % 2 == 0) {\n            return false;\n        }\n        for (int i = 3; i * i <= n; i += 2) {\n            if (n % i == 0) {\n                return false;\n            }\n        }\n        return true;\n    }\n\n    public static int decryptPassword(String input) {\n        String[] parts = input.split(\",\");\n        int a = Integer.parseInt(parts[0].trim());\n        int b = Integer.parseInt(parts[1].trim());\n\n        int c = revNum(String.valueOf(a));\n        int d = revNum(String.valueOf(b));\n\n        if (isPrime(c)) {",
+                "completion":  "            if (isPrime(d)) {\n                return c + d;\n            } else {\n                return a + b;\n            }\n        } else {\n            if (isPrime(d)) {\n                return a + b;\n            } else {\n                return a * b;\n            }\n        }\n    }\n}",
+            }
+        ] 
+            
+        few_shot_correct_prompt = ""
+        for example in correct_examples:
+            few_shot_correct_prompt += f"Example incomplete novice student code prompt:\n{example['prompt']}\nExample completion provided by you:\n{example['completion']}\n\n"
+        
+        incorrect_examples = [
+            {
+                "prompt": "public class Greeting {\n    public static String greet(String name) {\n        // The function will greet the name with \"Hi\" and \"Bye\"\n",
+                "completion": "        result = new StringBuilder();\n        result.append(\"Hi \").append(name).append(\"\\n\");\n        result.append(\"Bye \").append(name);\n        return result.toString();\n    }\n}"
+            },
+            {
+                "prompt": "public class StringModifier {\n    public static String modifyString(String inp) {\n        int ni = inp.indexOf(\"not\");\n        int bi = inp.indexOf(\"bad\");\n\n        if (ni == -1) {\n            return inp;\n",
+                "completion": "        } else if (bi = -1) {\n            return inp;\n        } else if (ni > bi) {\n            return inp;\n        } else {\n             bi = bi + \"bad\".length();\n            String op = inp.substring(0, ni) + \"good\" + inp.substring(bi);\n            return op;\n        }\n    }\n}",
+            },
+            {
+                "prompt":  "public class BitcoinPasswordDecryptor {\n    public static int revNum(String n) {\n        return Integer.parseInt(new StringBuilder(n).reverse().toString());\n    }\n\n    public static boolean isPrime(int n) {\n        if (n == 2) {\n            return true;\n        }\n        if (n == 1 || n % 2 == 0) {\n            return false;\n        }\n        for (int i = 3; i * i <= n; i += 2) {\n            if (n % i == 0) {\n                return false;\n            }\n        }\n        return true;\n    }\n\n    public static int decryptPassword(String input) {\n        String[] parts = input.split(\",\");\n        int a = Integer.parseInt(parts[0].trim());\n        int b = Integer.parseInt(parts[1].trim());\n\n        int c = revNum(String.valueOf(a));\n        int d = revNum(String.valueOf(b));\n\n        if (isPrime(c)) {",
+                "completion":  "            if (isPrime(d)) {\n                return c + d;\n            } else {\n                return a + b;\n            }\n        } else {\n            if (isPrime(d)) {\n                return true;\n            } else {\n                return a * b;\n            }\n        }\n    }\n}",
+            }
+        ]
+
+        few_shot_incorrect_prompt = ""
+        for example in incorrect_examples:
+            few_shot_incorrect_prompt += f"Example incomplete novice student code prompt:\n{example['prompt']}\nExample error injected completion provided by you:\n{example['completion']}\n\n"
+
         try:
             response = openai.chat.completions.create(
                 model="gpt-4o",
                 messages=[
-                    {"role": "system", "content": "You are a helpful programming assistant developed to force novice students engage with code by injecting errors into your completions."},
-                    {"role": "user", "content": f"Complete the following Java code by providing me the remaining lines. Purposely make one of the following errors in the remaining lines of code you write - 1) use a variable without initializing it, 2)assign a variable the wrong type (type mismatch), 3) use an incorrect argument for a functional call, or 4) use comparision instead of operator or vice versa. Choose which type or error is best to inject based on the test cases {test_file}. Just give me the remaining lines with the error injected, in correct syntax. Do not give me the whole block of code. Do not add any comments.: {text}"}
+                  {"role": "system", "content": "You are a helpful programming assistant developed to force novice students engage with code by injecting errors into your completions. You provide only the remaining lines of properly syntaxed Java code as your response but you purposely inject an error into your completion. You work by injecting one SEMANTIC error into your completion, examples of error types are: 1) use a variable without initializing it, 2)assign a variable the wrong type (type mismatch), 3) use an incorrect argument for a functional call, or 4) use comparision instead of operator or vice versa. Just give me the remaining lines with the error injected, in correct syntax. You do NOT add any comments saying what error has been injected or where as students are supposed to identify this themselves. Here are some examples of incomplete code prompts you can get and the error injected completions you can provide in json format - Obviously, you have to return the answer in Java, correctly syntaxed, not json: "+ few_shot_incorrect_prompt},
+                  {"role": "user", "content": f"Complete the following Java code by providing me the remaining lines in correct syntax. Purposely make a semantic error in the remaining lines of code you write. Do not add any comments.: {text}"}
                 ],
                 max_tokens=1000,
                 temperature=0.7
