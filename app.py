@@ -28,6 +28,7 @@ def receive_text():
     text = data.get('text')
     test_file = data.get('testFile')
     perform_accuracy_testing = data.get('performAccuracyTesting', False)
+    use_correct_code = data.get('useCorrectCode', False)
 
     if text:
         print(f"Received text: {text}")
@@ -83,12 +84,21 @@ def receive_text():
         for example in incorrect_examples:
             few_shot_incorrect_prompt += f"Example incomplete novice student code prompt:\n{example['prompt']}\nExample error injected completion provided by you:\n{example['completion']}\n\n"
 
+        correctSystem = "You are a helpful programming assistant."
+        correctUser = f"Complete the following Java code by providing me the remaining lines. Just give me the remaining lines in correct syntax. Do not give me the whole block of code. Do not add any comments, just give the remaining lines of code in correct syntax: {text}"
+        
+        incorrectSystem = "You are a helpful programming assistant developed to force novice students engage with code by injecting errors into your completions. You provide only the remaining lines of properly syntaxed Java code as your response but you purposely inject an error into your completion. You work by injecting one SEMANTIC error into your completion, examples of error types are: 1) use a variable without initializing it, 2)assign a variable the wrong type (type mismatch), 3) use an incorrect argument for a functional call, or 4) use comparision instead of operator or vice versa. Just give me the remaining lines with the error injected, in correct syntax. You do NOT add any comments saying what error has been injected or where as students are supposed to identify this themselves. Here are some examples of incomplete code prompts you can get and the error injected completions you can provide in json format - Obviously, you have to return the answer in Java, correctly syntaxed, not json: "+ few_shot_incorrect_prompt
+        incorrectUser = f"Complete the following Java code by providing me the remaining lines in correct syntax. Purposely make a semantic error in the remaining lines of code you write. Do not add any comments.: {text}"
+        
         try:
+            system_message = correctSystem if use_correct_code else incorrectSystem
+            user_message = correctUser if use_correct_code else incorrectUser
+
             response = openai.chat.completions.create(
                 model="gpt-4o",
                 messages=[
-                  {"role": "system", "content": "You are a helpful programming assistant developed to force novice students engage with code by injecting errors into your completions. You provide only the remaining lines of properly syntaxed Java code as your response but you purposely inject an error into your completion. You work by injecting one SEMANTIC error into your completion, examples of error types are: 1) use a variable without initializing it, 2)assign a variable the wrong type (type mismatch), 3) use an incorrect argument for a functional call, or 4) use comparision instead of operator or vice versa. Just give me the remaining lines with the error injected, in correct syntax. You do NOT add any comments saying what error has been injected or where as students are supposed to identify this themselves. Here are some examples of incomplete code prompts you can get and the error injected completions you can provide in json format - Obviously, you have to return the answer in Java, correctly syntaxed, not json: "+ few_shot_incorrect_prompt},
-                  {"role": "user", "content": f"Complete the following Java code by providing me the remaining lines in correct syntax. Purposely make a semantic error in the remaining lines of code you write. Do not add any comments.: {text}"}
+                  {"role": "system", "content": system_message},
+                  {"role": "user", "content": user_message}
                 ],
                 max_tokens=1000,
                 temperature=0.7
