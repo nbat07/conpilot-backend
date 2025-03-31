@@ -1,3 +1,5 @@
+import logging
+import pandas as pd
 import subprocess
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -7,21 +9,55 @@ from openai import OpenAI
 import javalang
 import random
 
+import pandas as pd
+import os
+
+def log_to_excel(text, code_completion, is_correct):
+    # Define the file name
+    excel_file = "output_log.xlsx"
+
+    # Create a DataFrame with the new data
+    new_data = pd.DataFrame([{
+        "Text Received": text,
+        "Code Completion": code_completion,
+        "Is Correct": is_correct
+    }])
+
+    # Check if the file already exists
+    if os.path.exists(excel_file):
+        # If the file exists, append the new data to it
+        existing_data = pd.read_excel(excel_file)
+        updated_data = pd.concat([existing_data, new_data], ignore_index=True)
+    else:
+        # If the file does not exist, create it with the new data
+        updated_data = new_data
+
+    # Write the updated data to the Excel file
+    updated_data.to_excel(excel_file, index=False)
+
+logging.basicConfig(
+    level=logging.INFO,  # Set the logging level
+    format='%(asctime)s - %(levelname)s - %(message)s',  # Log format
+    handlers=[
+        logging.FileHandler("app_log.txt"),  # Log to a file
+        logging.StreamHandler()  # Log to the terminal
+    ]
+)
+
 app = Flask(__name__)
 CORS(app)
 client = OpenAI()
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-def calculate_accuracy(output, errors):
+def check_correct(output, errors):
     if errors:
         return 0
     # Example: If all tests pass, return 100% accuracy
-    return 100 if 'OK' in output else 0
+    return 1 if 'OK' in output else 0
 
 def log_to_file(log_message):
-    with open('terminalLog.txt', 'a') as log_file:
-        log_file.write(log_message + '\n')
+    logging.info(log_message)  # Use logging instead of manually writing to a file
 
 def choose_random_line(code_completion):
     lines = code_completion.split('\n')
@@ -38,28 +74,28 @@ def parse_and_replace_line_old(code_completion, chosen_line):
             # Try to parse as an expression
             expression = parser.parse_expression()
             chosen_line_with_error = inject_error_into_line(expression)
-            print(f"Chosen line with error: {expression}")
+            logging.info(f"Chosen line with error: {expression}")
             parsed_code = ast_to_code_expression(chosen_line_with_error)
         except:
             # If parsing as an expression fails, try to parse as a statement
             statement = parser.parse_statement()
             chosen_line_with_error = inject_error_into_line(statement)
-            print(f"Chosen line with error: {statement}")
+            logging.info(f"Chosen line with error: {statement}")
             parsed_code = ast_to_code_statement(chosen_line_with_error, 0)
         return code_completion.replace(chosen_line, parsed_code)
     except Exception as e:
-        print(f"Error parsing expression: {e}")
+        logging.error(f"Error parsing expression: {e}")
         return "Error" 
 
 def parse_and_replace_line(code_completion, chosen_line):
     try:
         # Inject an error into the chosen line using string manipulation
         chosen_line_with_error = inject_error_into_line(chosen_line)
-        print(f"Chosen line with error: {chosen_line_with_error}")
+        logging.info(f"Chosen line with error: {chosen_line_with_error}")
         # Replace the original line with the modified line in codeCompletion
         return code_completion.replace(chosen_line, chosen_line_with_error)
     except Exception as e:
-        print(f"Error injecting error into line: {e}")
+        logging.error(f"Error injecting error into line: {e}")
         return "Error"      
     
 def inject_error_into_line(line):
@@ -294,23 +330,23 @@ def ast_to_code_statement(node, indent_level):
         body = '\n'.join([ast_to_code_statement(statement, indent_level) for statement in node.statements])
         return f"{body}"
     elif isinstance(node, javalang.tree.VariableDeclaration):
-        print(f"Processing VariableDeclaration: {node}")
+        logging.info(f"Processing VariableDeclaration: {node}")
         
         # Loop through each declarator and process it
         variable_declarations = []
         for var in node.declarators:
-            print(f"Variable in declarator: {var}")
+            logging.info(f"Variable in declarator: {var}")
             
             # Handle 'name' attribute safely
             if hasattr(var, 'name'):
                 name = var.name
-                print(f"Variable name: {name}")
+                logging.info(f"Variable name: {name}")
             else:
                 # If 'name' is missing, log it and proceed
-                print(f"WARNING: Missing 'name' attribute in VariableDeclarator. Inspecting further...")
-                print(f"Attributes of variable: {dir(var)}")
+                logging.info(f"WARNING: Missing 'name' attribute in VariableDeclarator. Inspecting further...")
+                logging.info(f"Attributes of variable: {dir(var)}")
                 name = "UNKNOWN_NAME"  # Fallback name
-                print(f"Using fallback name: {name}")
+                logging.info(f"Using fallback name: {name}")
             
             # Handle initializers
             initializer = ""
@@ -351,11 +387,11 @@ def ast_to_code_expression(node):
     elif isinstance(node, javalang.tree.MethodInvocation):
         qualifier = f"{ast_to_code_expression(node.qualifier)}." if node.qualifier else ""
         arguments = ', '.join([ast_to_code_expression(arg) for arg in node.arguments])
-        print(f"MethodInvocation: {node.member}, Qualifier: {node.qualifier}")
+        logging.info(f"MethodInvocation: {node.member}, Qualifier: {node.qualifier}")
         return f"{qualifier}{node.member}({arguments})"
     elif isinstance(node, javalang.tree.MemberReference):
         qualifier = f"{ast_to_code_expression(node.qualifier)}." if node.qualifier else ""
-        print(f"MemberReference: {node.member}, Qualifier: {node.qualifier}")
+        logging.info(f"MemberReference: {node.member}, Qualifier: {node.qualifier}")
         return f"{qualifier}{node.member}"
     elif isinstance(node, javalang.tree.Literal):
         return node.value
@@ -377,8 +413,10 @@ def receive_text():
     use_llm_injection = data.get('useLLMInjection', True)
 
     if text:
-        print(f"Received text: {text}")
-        print(f"Using test file: {test_file}")
+        logging.info(f"Received text: {text}")
+        logging.info(f"Using test file: {test_file}")
+        #print(f"Received text: {text}")
+        #print(f"Using test file: {test_file}")
         
         try:
             if perform_accuracy_testing:
@@ -389,7 +427,7 @@ def receive_text():
 
         except Exception as e:
             print(f"Error reading test file: {e}")
-            log_to_file(f"Error reading test file: {e}")
+            logging.error(f"Error reading test file: {e}")
             return jsonify({'status': 'error', 'message': 'Error reading test file'}), 500
     
         correct_examples = [
@@ -452,7 +490,7 @@ def receive_text():
                 )
                 # Extract the generated poem text from the response
                 codeCompletion = response.choices[0].message.content
-                print(f"Generated code: {codeCompletion}")
+                logging.info(f"Generated code: {codeCompletion}")
 
                 codeCompletion = codeCompletion.replace('```java\n', '').replace('```', '').strip()
                 combinedCode = text + codeCompletion
@@ -472,20 +510,20 @@ def receive_text():
                 )
                 # Extract the generated poem text from the response
                 codeCompletion = response.choices[0].message.content
-                print(f"Generated code: {codeCompletion}")
+                logging.info(f"Generated code: {codeCompletion}")
 
                 codeCompletion = codeCompletion.replace('```java\n', '').replace('```', '').strip()
                 # Add missing closing braces for method and class
                 chosen_line = choose_random_line(codeCompletion)
                 if chosen_line:
-                    print(f"Chosen line for parsing: {chosen_line}")
+                    logging.info(f"Chosen line for parsing: {chosen_line}")
                     codeCompletion = parse_and_replace_line(codeCompletion, chosen_line)
-                    print(f"Code completion after parsing and replacing line: {codeCompletion}")
+                    logging.info(f"Code completion after parsing and replacing line: {codeCompletion}")
 
                 # Add missing closing braces for method and class
                 combinedCode = text + "\n" + codeCompletion
-                print("Combined code for parsing:")
-                print(combinedCode)
+                logging.info("Combined code for parsing:")
+                logging.info(combinedCode)
                 
 
             if perform_accuracy_testing:
@@ -499,17 +537,18 @@ def receive_text():
                 # Parse the test results
                 output = result.stdout
                 errors = result.stderr
-                print(f"output: {output}")
-                print(f"errors: {errors}")
+                logging.info(f"output: {output}")
+                logging.info(f"errors: {errors}")
 
-                accuracy = calculate_accuracy(output, errors)
-                print(f"accuracy: {accuracy}")
+                isCorrect = check_correct(output, errors)
+                logging.info(f"isCorrect: {isCorrect}")
+                log_to_excel(text, codeCompletion, isCorrect)
 
                 return jsonify({'status': 'success', 'message': 'Text received', 'code': codeCompletion, 'output': output, 'errors': errors}), 200
             else:
                 return jsonify({'status': 'success', 'message': 'Text received', 'code': codeCompletion}), 200
         except Exception as e:
-            print(f"OpenAI API error: {e}")
+            logging.error(f"OpenAI API error: {e}")
             return jsonify({'status': 'error', 'message': 'OpenAI API error'}), 500
     else:
         return jsonify({'status': 'error', 'message': 'No text received'}), 400

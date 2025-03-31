@@ -10,13 +10,4 @@ public class ArmstrongNumberChecker {
         }
         return sum == num;
     }
-
-    public static void main(String[] args) {
-        int number = 153;
-        if (isArmstrongNumber(number)) {
-            System.out.println(number + " is an Armstrong number.");
-        } else {
-            System.out.println(number + " is not an Armstrong number.");
-        }
-    }
 }

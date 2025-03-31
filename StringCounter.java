@@ -3,12 +3,11 @@ public class StringCounter {
         String[] b = input.split(",");
         int k = b.length;
         int m = 0;
-       int x = 0;while (m < k) {
-           if (b[m].matches("^[a-zA-Z]+$")) {
-               x++;
-           }
-           m++;
-       }
-       return x;
+       int x = 0;for (int i = 0; i < k; i++) {
+            if (b[i].matches("[a-zA-Z]+")) {
+                x++;
+            }
+        }
+        return x;
     }
 }

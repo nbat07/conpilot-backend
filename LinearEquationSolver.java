@@ -7,7 +7,8 @@ public class LinearEquationSolver {
             DecompositionSolver solver = new LUDecomposition(coefficients).getSolver();
 return solver.solve(new ArrayRealVector(b, false)).toArray();
         } catch (Exception e) {
-            throw new IllegalArgumentException("Invalid matrix or vector dimensions", e);
+            e.printStackTrace();
+            return null;
         }
     }
 }

@@ -7,8 +7,4 @@ public class AckermannFunction {
             return ackermann(m - 1, ackermann(m, n - 1));
         }
     }
-    public static void main(String[] args) {
-        int result = ackermann(3, 2);
-        System.out.println("Ackermann(3, 2) = " + result);
-    }
 }

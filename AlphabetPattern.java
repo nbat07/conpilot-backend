@@ -6,12 +6,9 @@ public class AlphabetPattern {
         int i = 0;
         String j = "_";
 
-        while (i < n && n <= 26) {int k = 0;
-            while (k <= i) {
-                result.append(j).append(a.charAt(k));
-                k++;
-            }
-            result.append(j).append("\n");
+        while (i < n && n <= 26) {result.append(j);
+            j = j + a.charAt(i) + "_";
+            result.append(a.substring(0, i + 1).replace("", "_").substring(1)).append("\n");
             i++;
         }
         return result.toString();
