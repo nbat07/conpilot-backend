@@ -12,15 +12,18 @@ import random
 import pandas as pd
 import os
 
-def log_to_excel(text, code_completion, is_correct):
+def log_to_excel(text, code_completion, is_correct, output, errors, error_count):
     # Define the file name
     excel_file = "output_log.xlsx"
 
     # Create a DataFrame with the new data
     new_data = pd.DataFrame([{
-        "Text Received": text,
+        "Input Code": text,
         "Code Completion": code_completion,
-        "Is Correct": is_correct
+        "isCorrect": is_correct,
+        "Output": output,
+        "Errors": errors,
+        "Direct Error Count": error_count
     }])
 
     # Check if the file already exists
@@ -90,13 +93,13 @@ def parse_and_replace_line_old(code_completion, chosen_line):
 def parse_and_replace_line(code_completion, chosen_line):
     try:
         # Inject an error into the chosen line using string manipulation
-        chosen_line_with_error = inject_error_into_line(chosen_line)
+        chosen_line_with_error, error_count = inject_error_into_line(chosen_line)
         logging.info(f"Chosen line with error: {chosen_line_with_error}")
         # Replace the original line with the modified line in codeCompletion
-        return code_completion.replace(chosen_line, chosen_line_with_error)
+        return code_completion.replace(chosen_line, chosen_line_with_error), error_count
     except Exception as e:
         logging.error(f"Error injecting error into line: {e}")
-        return "Error"      
+        return "Error", 0     
     
 def inject_error_into_line(line):
     # Example error injection: Change binary operations, change 'for' to 'while', change 'return true' to 'return false'
@@ -110,6 +113,7 @@ def inject_error_into_line(line):
             line = line.replace(old, new)
             error_count += 1
             injected_categories.add(category)
+            logging.info(f"Error injected. Current error count: {error_count}")
         return line
     
     def replace_method_arguments(line):
@@ -121,17 +125,61 @@ def inject_error_into_line(line):
             for match in matches:
                 method_call, args = match
                 if args:
-                    new_args = ', '.join(['0' for _ in args.split(',')])
+                    arg_list = args.split(',') if args.strip() else []
+
+                    if len(arg_list) > 0:
+
+                        # Choose a random error to inject
+                        error_type = random.choice(['replace_with_tempVar', 'remove_argument', 'add_extra_argument', 'swap_arguments', 'replace_with_null'])
+    	                
+                        logging.info(f"Chosen error type: {error_type}")
+
+                        if error_type == 'replace_with_tempVar':
+                            arg_list[random.randint(0, len(arg_list) - 1)] = 'tempVar'
+
+                        elif error_type == 'remove_argument':
+                            arg_list.pop(random.randint(0, len(arg_list) - 1))
+
+                        elif error_type == 'add_extra_argument':
+                            arg_list.append('temp')
+
+                        elif error_type == 'swap_arguments' and len(arg_list) > 1:
+                            i, j = random.sample(range(len(arg_list)), 2)
+                            arg_list[i], arg_list[j] = arg_list[j], arg_list[i]
+
+                        elif error_type == 'replace_with_null':
+                            arg_list[random.randint(0, len(arg_list) - 1)] = 'null'
+
+                    else:
+                        logging.info("No arguments found. Adding an extra argument.")
+                        arg_list.append('tmp')
+
+                    new_args = ', '.join(arg_list)
                     line = line.replace(f"{method_call}({args})", f"{method_call}({new_args})")
                     error_count += 1
                     injected_categories.add('method_arguments')
+                    logging.info(f"Error injected. Current error count: {error_count}")
+
                     if error_count >= max_errors:
                         break
-        return line    
+        return line   
+    
+    def remove_declaration(line):
+        nonlocal error_count
+        if error_count < max_errors and ' ' in line:
+            import re
+            pattern = r'^\s*(int|double|String|char|boolean|float|new)\s+(\w+)\s*='
+            match = re.search(pattern, line)
+            if match:
+                variable_name = match.group(2)
+                line = re.sub(pattern, f'{variable_name} =', line, count=1)
+                error_count += 1
+                injected_categories.add('remove_type')
+                logging.info(f"Error injected. Current error count: {error_count}")
+        return line
 
     # Method calls and instantiation
-    line = replace_and_count(line, '.length', '.size()', 'method_calls')
-    line = replace_and_count(line, 'new', '', 'method_calls')
+    line = replace_and_count(line, '.length', '.size', 'method_calls')
     line = replace_method_arguments(line)
 
     # Off by one, calculation
@@ -160,11 +208,14 @@ def inject_error_into_line(line):
     line = replace_and_count(line, 'int', 'double', 'types')
     line = replace_and_count(line, 'double', 'int', 'types')
 
-    # Bracketing/syntax
+    #Removing types/variable initialization
+    line = remove_declaration(line)
+
+    # Bracketing/syntax for backup
     line = replace_and_count(line, '}', '', 'bracketing')
     line = replace_and_count(line, '{', '', 'bracketing')
 
-    return line 
+    return line, error_count
 
 def inject_error_into_line_old(node):
     if isinstance(node, javalang.tree.BinaryOperation):
@@ -469,9 +520,9 @@ def receive_text():
             few_shot_incorrect_prompt += f"Example incomplete novice student code prompt:\n{example['prompt']}\nExample error injected completion provided by you:\n{example['completion']}\n\n"
 
         correctSystem = "You are a helpful programming assistant."
-        correctUser = f"Complete the following Java code by providing me the remaining lines. Just give me the remaining lines in correct syntax. Do not give me the whole block of code. Do not add any comments, just give the remaining lines of code in correct syntax: {text}"
+        correctUser =  f"Complete the following Java code by providing me with ONLY the remaining lines in correct syntax, without any added comments: {text}."
         
-        incorrectSystem = "You are a helpful programming assistant developed to force novice students engage with code by injecting errors into your completions. You provide only the remaining lines of properly syntaxed Java code as your response but you purposely inject an error into your completion. You work by injecting one SEMANTIC error into your completion, examples of error types are: 1) use a variable without initializing it, 2)assign a variable the wrong type (type mismatch), 3) use an incorrect argument for a functional call, or 4) use comparision instead of operator or vice versa. Just give me the remaining lines with the error injected, in correct syntax. You do NOT add any comments saying what error has been injected or where as students are supposed to identify this themselves. Here are some examples of incomplete code prompts you can get and the error injected completions you can provide in json format - Obviously, you have to return the answer in Java, correctly syntaxed, not json: "+ few_shot_incorrect_prompt
+        incorrectSystem = "You are a helpful programming assistant developed to force novice students engage with code by injecting errors into your completions. You provide only the remaining lines of properly syntaxed Java code as your response but you purposely inject an error into your completion. You work by injecting one SEMANTIC error into your completion, examples of error types are: 1) use a variable without initializing it, 2)assign a variable the wrong type (type mismatch), 3) use an incorrect argument for a functional call, or 4) use comparision instead of operator or vice versa. Just give me the remaining lines with the error injected, in correct syntax. You do NOT add any comments saying what error has been injected or where, as students are supposed to identify this themselves. Here are some examples of incomplete code prompts you can get and the error injected completions you can provide in json format - Obviously, you have to return the answer in Java, correctly syntaxed, not json: "+ few_shot_incorrect_prompt
         incorrectUser = f"Complete the following Java code by providing me the remaining lines in correct syntax. Purposely make a semantic error in the remaining lines of code you write. Do not add any comments.: {text}"
         
         try:
@@ -517,7 +568,7 @@ def receive_text():
                 chosen_line = choose_random_line(codeCompletion)
                 if chosen_line:
                     logging.info(f"Chosen line for parsing: {chosen_line}")
-                    codeCompletion = parse_and_replace_line(codeCompletion, chosen_line)
+                    codeCompletion, error_count = parse_and_replace_line(codeCompletion, chosen_line)
                     logging.info(f"Code completion after parsing and replacing line: {codeCompletion}")
 
                 # Add missing closing braces for method and class
@@ -542,7 +593,7 @@ def receive_text():
 
                 isCorrect = check_correct(output, errors)
                 logging.info(f"isCorrect: {isCorrect}")
-                log_to_excel(text, codeCompletion, isCorrect)
+                log_to_excel(text, codeCompletion, isCorrect, output, errors, error_count)
 
                 return jsonify({'status': 'success', 'message': 'Text received', 'code': codeCompletion, 'output': output, 'errors': errors}), 200
             else:
@@ -555,59 +606,3 @@ def receive_text():
 
 if __name__ == '__main__':
     app.run(port=5000)
-
-
-'''
-from flask import Flask, request, jsonify
-import openai
-from flask_cors import CORS
-import os
-import logging
-
-app = Flask(__name__)
-CORS(app)  # Allow cross-origin requests
-
-# Initialize OpenAI API key from environment variable
-openai_api_key = os.getenv("OPENAI_API_KEY")
-if not openai_api_key:
-    logging.error("OPENAI_API_KEY environment variable not set")
-    raise ValueError("OPENAI_API_KEY environment variable not set")
-openai.api_key = openai_api_key
-
-@app.route('/complete', methods=['POST'])
-def complete_code():
-    try:
-        # Get the code context from the frontend
-        data = request.json
-        code_context = data.get('codeContext')
-        logging.info(f"Received code context: {code_context}")
-
-        if not code_context:
-            return jsonify({'error': 'No code context provided'}), 400
-        
-        # Call OpenAI API for code completion
-        completion = openai.ChatCompletion.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are a helpful coding assistant."},
-                {"role": "user", "content": code_context}
-            ],
-            max_tokens=100,
-            temperature=0.5
-        )
-
-        completion_text = completion.choices[0].message['content'].strip()
-        logging.info(f"Completion received: {completion_text}")
-        
-        return jsonify({'completions': [completion_text]})
-    
-    except openai.error.OpenAIError as e:
-        logging.error(f"OpenAI API error: {e}")
-        return jsonify({'error': 'OpenAI API error'}), 500
-    except Exception as e:
-        logging.error(f"Unexpected error: {e}")
-        return jsonify({'error': str(e)}), 500
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=3000)
-'''
