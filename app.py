@@ -12,7 +12,8 @@ import random
 import pandas as pd
 import os
 
-def log_to_excel(text, code_completion, is_correct, output, errors, error_count):
+def log_to_excel(text, code_completion, is_correct, output, errors):
+# for Direct error injections: def log_to_excel(text, code_completion, is_correct, output, errors, error_count):
     # Define the file name
     excel_file = "output_log.xlsx"
 
@@ -23,7 +24,7 @@ def log_to_excel(text, code_completion, is_correct, output, errors, error_count)
         "isCorrect": is_correct,
         "Output": output,
         "Errors": errors,
-        "Direct Error Count": error_count
+        #"Direct Error Count": error_count
     }])
 
     # Check if the file already exists
@@ -593,7 +594,9 @@ def receive_text():
 
                 isCorrect = check_correct(output, errors)
                 logging.info(f"isCorrect: {isCorrect}")
-                log_to_excel(text, codeCompletion, isCorrect, output, errors, error_count)
+
+                log_to_excel(text, codeCompletion, isCorrect, output, errors)
+                #for direct error injections: log_to_excel(text, codeCompletion, isCorrect, output, errors, error_count)
 
                 return jsonify({'status': 'success', 'message': 'Text received', 'code': codeCompletion, 'output': output, 'errors': errors}), 200
             else:
